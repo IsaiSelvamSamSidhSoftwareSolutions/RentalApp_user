@@ -17,58 +17,126 @@ class _LoginScreenState extends State<LoginScreen> {
   final GetStorage storage = GetStorage();
   bool isLoading = false;
   bool isPasswordVisible = false;
-
+//
+//   Future<void> loginUser() async {
+//     setState(() => isLoading = true);
+//
+//     final url = Uri.parse("https://getsetbuild.samsidh.com/api/v1/auth/user/login");
+//     final response = await http.post(
+//       url,
+//       headers: {"Content-Type": "application/json"},
+//       body: jsonEncode({
+//         "email": emailController.text.trim(),
+//         "password": passwordController.text.trim(),
+//       }),
+//     );
+//
+//     setState(() => isLoading = false);
+//     final responseBody = jsonDecode(response.body);
+//
+//     if (response.statusCode == 200 && responseBody["status"] == "success") {
+//       final user = responseBody["data"]["user"];
+//       final usertoken = responseBody['data'];
+//
+//       storage.write("firstName", user["firstName"]);
+//       storage.write("lastName", user["lastName"]);
+//       storage.write("email", user["email"]);
+//       storage.write("phoneNumber", user["phoneNumber"]);
+//       storage.write("avatar", user["avatar"]);
+//       storage.write("_id", user["_id"]);
+//       storage.write("role", user["role"]);
+//       storage.write("subscription_status", user["subscription_status"]);
+//       //storage.write("jwt", usertoken);
+//
+// // Store address details if available
+//       if (user["addresses"] != null && user["addresses"].isNotEmpty) {
+//         final address = user["addresses"][0]; // Assuming you want to store the first address
+//         storage.write("addressLine1", address["addressLine1"]);
+//         storage.write("addressLine2", address["addressLine2"]);
+//         storage.write("city", address["city"]);
+//         storage.write("state", address["state"]);
+//         storage.write("country", address["country"]);
+//         storage.write("pincode", address["pincode"]);
+//         storage.write("addressId", address["_id"]); // Store address ID if needed
+//       }
+//
+//       showSnackbar("Login Successful!", Colors.green);
+//       Future.delayed(Duration(seconds: 1), () {
+//         Navigator.pushReplacementNamed(context, '/home');
+//       });
+//     } else {
+//       showSnackbar("Incorrect email or password", Colors.red);
+//     }
+//   }
   Future<void> loginUser() async {
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      showSnackbar("Please fill in all fields", Colors.red);
+      return;
+    }
+
     setState(() => isLoading = true);
 
-    final url = Uri.parse("https://getsetbuild.samsidh.com/api/v1/auth/user/login");
-    final response = await http.post(
-      url,
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "email": emailController.text.trim(),
-        "password": passwordController.text.trim(),
-      }),
-    );
+    try {
+      final url = Uri.parse("https://getsetbuild.samsidh.com/api/v1/auth/user/login");
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email,
+          "password": password,
+        }),
+      );
 
-    setState(() => isLoading = false);
-    final responseBody = jsonDecode(response.body);
+      setState(() => isLoading = false);
+      final responseBody = jsonDecode(response.body);
 
-    if (response.statusCode == 200 && responseBody["status"] == "success") {
-      final user = responseBody["data"]["user"];
-      final usertoken = responseBody['data'];
-// Store individual user details in GetStorage
-      storage.write("firstName", user["firstName"]);
-      storage.write("lastName", user["lastName"]);
-      storage.write("email", user["email"]);
-      storage.write("phoneNumber", user["phoneNumber"]);
-      storage.write("avatar", user["avatar"]);
-      storage.write("_id", user["_id"]);
-      storage.write("role", user["role"]);
-      storage.write("subscription_status", user["subscription_status"]);
-      //storage.write("jwt", usertoken);
+      if (response.statusCode == 200 && responseBody["status"] == "success") {
+        final token = responseBody["token"]; // Extract token from the root level
+        final user = responseBody["data"]["user"]; // Extract user data
 
-// Store address details if available
-      if (user["addresses"] != null && user["addresses"].isNotEmpty) {
-        final address = user["addresses"][0]; // Assuming you want to store the first address
-        storage.write("addressLine1", address["addressLine1"]);
-        storage.write("addressLine2", address["addressLine2"]);
-        storage.write("city", address["city"]);
-        storage.write("state", address["state"]);
-        storage.write("country", address["country"]);
-        storage.write("pincode", address["pincode"]);
-        storage.write("addressId", address["_id"]); // Store address ID if needed
+        if (token != null && user != null) {
+          // Store user details in GetStorage
+          storage.write("firstName", user["firstName"]);
+          storage.write("lastName", user["lastName"]);
+          storage.write("email", user["email"]);
+          storage.write("phoneNumber", user["phoneNumber"]);
+          storage.write("avatar", user["avatar"]);
+          storage.write("_id", user["_id"]);
+          storage.write("role", user["role"]);
+          storage.write("subscription_status", user["subscription_status"]);
+          storage.write("jwt", token); // Store the token
+
+          // Store address details if available
+          if (user["addresses"] != null && user["addresses"].isNotEmpty) {
+            final address = user["addresses"][0]; // Assuming you want to store the first address
+            storage.write("addressLine1", address["addressLine1"]);
+            storage.write("addressLine2", address["addressLine2"]);
+            storage.write("city", address["city"]);
+            storage.write("state", address["state"]);
+            storage.write("country", address["country"]);
+            storage.write("pincode", address["pincode"]);
+            storage.write("addressId", address["_id"]); // Store address ID if needed
+          }
+
+          showSnackbar("Login Successful!", Colors.green);
+          Future.delayed(Duration(seconds: 1), () {
+            Navigator.pushReplacementNamed(context, '/home');
+          });
+        } else {
+          showSnackbar("Invalid response from server", Colors.red);
+        }
+      } else {
+        final errorMessage = responseBody["message"] ?? "Incorrect email or password";
+        showSnackbar(errorMessage, Colors.red);
       }
-
-      showSnackbar("Login Successful!", Colors.green);
-      Future.delayed(Duration(seconds: 1), () {
-        Navigator.pushReplacementNamed(context, '/home');
-      });
-    } else {
-      showSnackbar("Incorrect email or password", Colors.red);
+    } catch (e) {
+      setState(() => isLoading = false);
+      showSnackbar("An error occurred: $e", Colors.red);
     }
   }
-
   void showSnackbar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

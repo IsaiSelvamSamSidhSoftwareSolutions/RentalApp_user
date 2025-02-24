@@ -38,7 +38,7 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
 
     setState(() => isLoading = true);
     final String token = storage.read("jwt") ?? "";
-
+    print("ORGINAL TOKEN $token");
     // Construct the API URL
     final url = Uri.parse(
         "https://getsetbuild.samsidh.com/api/v1/products/getProductsNearby?lat=$latitude&lng=$longitude");
