@@ -25,6 +25,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Add this for Razorpay -->
+        <meta-data
+            android:name="com.razorpay.ApiKey"
+            android:value="rzp_test_fxRDm53DIm5TMs" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

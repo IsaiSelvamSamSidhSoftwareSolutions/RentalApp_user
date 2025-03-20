@@ -1,9 +1,8 @@
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:table_calendar/table_calendar.dart';
 import 'AddToCart.dart';
 
 class RentProductScreen extends StatefulWidget {
@@ -29,17 +28,25 @@ class _RentProductScreenState extends State<RentProductScreen>
   @override
   void initState() {
     super.initState();
-    _parseAvailableDates();
+    print("Product Data: ${widget.product}"); // Print product details
+    if (widget.product != null) {
+      _parseAvailableDates(); // Parse dates only if product exists
+    } else {
+      print("Error: Product data is null");
+    }
+
     _animationController = AnimationController(
       vsync: this,
       duration: Duration(seconds: 1),
     );
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: Curves.easeIn,
       ),
     );
+
     _animationController.forward();
   }
 
@@ -50,11 +57,73 @@ class _RentProductScreenState extends State<RentProductScreen>
   }
 
   void _parseAvailableDates() {
-    List<dynamic> datesJson = widget.product["availableDays"];
-    availableDates = datesJson.map((date) => DateTime.parse(date)).toList();
+    if (widget.product.containsKey("availableDays") && widget.product["availableDays"] != null) {
+      // If `availableDays` exists, use it
+      List<dynamic> datesJson = widget.product["availableDays"];
+      availableDates = datesJson.map((date) => DateTime.parse(date.toString())).toList();
+    } else if (widget.product.containsKey("availability") &&
+        widget.product["availability"]["from"] != null &&
+        widget.product["availability"]["to"] != null) {
+      // Generate availableDays from "availability" period
+      DateTime startDate = DateTime.parse(widget.product["availability"]["from"]);
+      DateTime endDate = DateTime.parse(widget.product["availability"]["to"]);
+
+      availableDates = [];
+      for (DateTime date = startDate;
+      date.isBefore(endDate) || date.isAtSameMomentAs(endDate);
+      date = date.add(Duration(days: 1))) {
+        availableDates.add(date);
+      }
+
+      print("Generated availableDates from availability: $availableDates");
+    } else {
+      print("No available date information found!");
+      availableDates = [];
+    }
+
+    print("Final availableDates: $availableDates");
   }
 
+
+
   Future<void> _selectStartDate(BuildContext context) async {
+    if (availableDates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("No available dates found.")),
+      );
+      return;
+    }
+
+    // Convert availableDates.first to local time and extract date part
+    DateTime today = DateTime.now();
+    DateTime firstAvailableDate = availableDates.first.toLocal();
+
+    // Normalize dates to ignore time (only compare Year-Month-Day)
+    DateTime normalizedToday = DateTime(today.year, today.month, today.day);
+    DateTime normalizedFirstAvailable = DateTime(firstAvailableDate.year, firstAvailableDate.month, firstAvailableDate.day);
+
+    // Check if the first available date is in the past
+    if (normalizedFirstAvailable.isBefore(normalizedToday)) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text("Stock Unavailable"),
+          content: Text(
+            "Sorry for the inconvenience! This stock is currently unavailable. "
+                "You will get an update when the vendor adds new stock.\n\n"
+                "Still, you can browse more products.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("OK"),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: availableDates.first,
@@ -71,11 +140,12 @@ class _RentProductScreenState extends State<RentProductScreen>
     if (pickedDate != null && pickedDate != selectedStartDate) {
       setState(() {
         selectedStartDate = pickedDate;
-        selectedEndDate = null; // Reset end date when start date changes
-        numberOfDays = 0; // Reset number of days
+        selectedEndDate = null; // Reset end date
+        numberOfDays = 0;
       });
     }
   }
+
 
   Future<void> _selectEndDate(BuildContext context) async {
     if (selectedStartDate == null) {
@@ -220,29 +290,78 @@ class _RentProductScreenState extends State<RentProductScreen>
                     style: GoogleFonts.poppins(fontSize: 16),
                   ),
                   SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Text(
-                        "Availability: ",
-                        style: GoogleFonts.poppins(fontSize: 16),
-                      ),
-                      Icon(Icons.check_circle, color: Colors.green),
-                    ],
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    "Additional Services:",
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+
+                  if (widget.product["additionalAttachments"] != null &&
+                      widget.product["additionalAttachments"].isNotEmpty)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Additional Attachments:",
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        ...widget.product["additionalAttachments"].map<Widget>((attachment) {
+                          return ListTile(
+                            leading: Image.network(
+                              attachment["attachementImage"],
+                              width: 50,
+                              height: 50,
+                              fit: BoxFit.cover,
+                            ),
+                            title: Text(
+                              attachment["attachmentName"],
+                              style: GoogleFonts.poppins(fontSize: 14),
+                            ),
+                            subtitle: Text(
+                              "${attachment["attachementDescription"]} - ₹${attachment["price"]}",
+                              style: GoogleFonts.poppins(fontSize: 12),
+                            ),
+                          );
+                        }).toList(),
+                        SizedBox(height: 10),
+                      ],
+                    )
+                  else
+                    Text(
+                      "No additional attachments available.",
+                      style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey),
                     ),
-                  ),
-                  ...widget.product["additionalFields"].map<Widget>((service) {
-                    return Text(
-                      "${service["fieldName"]}: ₹${service["price"]} per day",
-                      style: GoogleFonts.poppins(fontSize: 16),
-                    );
-                  }).toList(),
+
+                  // Display Additional Services
+                  if (widget.product["additionalServices"] != null &&
+                      widget.product["additionalServices"].isNotEmpty)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Additional Services:",
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        ...widget.product["additionalServices"].map<Widget>((service) {
+                          return ListTile(
+                            title: Text(
+                              service["serviceType"],
+                              style: GoogleFonts.poppins(fontSize: 14),
+                            ),
+                            trailing: Text(
+                              "₹${service["price"]}",
+                              style: GoogleFonts.poppins(fontSize: 14),
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    )
+                  else
+                    Text(
+                      "No additional services available.",
+                      style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey),
+                    ),
                 ],
               ),
             ),
@@ -312,21 +431,7 @@ class _RentProductScreenState extends State<RentProductScreen>
                 ),
               ],
             ),
-            // // Price Type Dropdown
-            // DropdownButton<String>(
-            //   value: selectedPriceType,
-            //   onChanged: (String? newValue) {
-            //     setState(() {
-            //       selectedPriceType = newValue!;
-            //     });
-            //   },
-            //   items: widget.product["priceTypes"].map<DropdownMenuItem<String>>((priceType) {
-            //     return DropdownMenuItem<String>(
-            //       value: priceType["type"],
-            //       child: Text(priceType["type"]),
-            //     );
-            //   }).toList(),
-            // ),
+
             SizedBox(height: 10),
             // Quantity Input
             TextField(
@@ -337,12 +442,40 @@ class _RentProductScreenState extends State<RentProductScreen>
               ),
               keyboardType: TextInputType.number,
               inputFormatters: <TextInputFormatter>[
-                FilteringTextInputFormatter.digitsOnly
+                FilteringTextInputFormatter.digitsOnly, // Allow only digits
               ],
               onChanged: (value) {
-                setState(() {
-                  quantity = int.tryParse(value) ?? 1;
-                });
+                int enteredQuantity = int.tryParse(value) ?? 1; // Parse the entered value
+                int availableStock = widget.product["quantity"] ?? 1; // Get available stock from the product
+
+                if (enteredQuantity > availableStock) {
+                  // Show an alert if the quantity exceeds available stock
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text("Check Qunatity"),
+                      content: Text("Quantity exceeds available stock. Available stock: $availableStock"),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(context); // Close the dialog
+                          },
+                          child: Text("OK"),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  // Reset the quantity to the available stock
+                  setState(() {
+                    quantity = availableStock;
+                  });
+                } else {
+                  // Update the quantity if it's valid
+                  setState(() {
+                    quantity = enteredQuantity;
+                  });
+                }
               },
             ),
             SizedBox(height: 20),
@@ -374,6 +507,25 @@ class _RentProductScreenState extends State<RentProductScreen>
               onPressed: selectedStartDate == null || selectedEndDate == null
                   ? null
                   : () {
+                print("📦 Navigating to AddToCartScreen with Arguments:");
+                print("Product ID: ${widget.product["_id"]}");
+                print("Product Name: ${widget.product["name"]}");
+                print("Product Condition: ${widget.product["condition"]}");
+                print("Product Description: ${widget.product["description"]}");
+                print("Vendor Name: ${widget.product["vendor"]["companyName"]}");
+                print("Vendor Location: ${widget.product["address"]["city"]}, ${widget.product["address"]["state"]}");
+                print("Product Image: ${widget.product["productImages"].isNotEmpty ? widget.product["productImages"][0] : "https://via.placeholder.com/150"}");
+                print("Price Hourly: ${widget.product["priceTypes"][0]["price"].toDouble()}");
+                print("Price Daily: ${widget.product["priceTypes"][1]["price"].toDouble()}");
+                print("Available Days: ${widget.product.containsKey("availableDays") ? widget.product["availableDays"] : "No available days"}");
+                print("Additional Services: ${widget.product.containsKey("additionalServices") ? jsonEncode(widget.product["additionalServices"]) : "[]"}");
+                print("Additional Attachments: ${widget.product.containsKey("additionalAttachments") ? jsonEncode(widget.product["additionalAttachments"]) : "[]"}");
+                print("Quantity: $quantity");
+                print("Selected Price Type: $selectedPriceType");
+                print("Number of Days: $numberOfDays");
+                print("Selected Start Date: $selectedStartDate");
+                print("Selected End Date: $selectedEndDate");
+
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -389,15 +541,20 @@ class _RentProductScreenState extends State<RentProductScreen>
                           : "https://via.placeholder.com/150",
                       priceHourly: widget.product["priceTypes"][0]["price"].toDouble(),
                       priceDaily: widget.product["priceTypes"][1]["price"].toDouble(),
-                      availableDays: List<String>.from(widget.product["availableDays"]),
-                      additionalFields: List<Map<String, dynamic>>.from(widget.product["additionalFields"]),
+                      availableDays: widget.product.containsKey("availableDays")
+                          ? List<String>.from(widget.product["availableDays"])
+                          : [], // Pass empty list if availableDays is null
                       quantity: quantity,
                       selectedPriceType: selectedPriceType,
                       numberOfDays: numberOfDays,
-                      selectedStartDate: selectedStartDate,
-                      selectedEndDate: selectedEndDate,
-                      additionalServices: List<Map<String, dynamic>>.from(widget.product["additionalServices"]),
-                      additionalAttachments: List<Map<String, dynamic>>.from(widget.product["additionalAttachments"]), // Pass additionalAttachments
+                      selectedStartDate: selectedStartDate!,
+                      selectedEndDate: selectedEndDate!,
+                      additionalServices: widget.product.containsKey("additionalServices")
+                          ? List<Map<String, dynamic>>.from(widget.product["additionalServices"])
+                          : [], // Pass empty list if additionalServices is null
+                      additionalAttachments: widget.product.containsKey("additionalAttachments")
+                          ? List<Map<String, dynamic>>.from(widget.product["additionalAttachments"])
+                          : [], // Pass empty list if additionalAttachments is null
                     ),
                   ),
                 );

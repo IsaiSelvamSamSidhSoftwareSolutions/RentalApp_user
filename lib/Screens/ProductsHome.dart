@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../Screens/RentProductScreen.dart';
+import 'package:shimmer/shimmer.dart';
 class ProductsListScreen extends StatefulWidget {
   @override
   _ProductsListScreenState createState() => _ProductsListScreenState();
@@ -42,7 +43,7 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
     // Construct the API URL
     final url = Uri.parse(
         "https://getsetbuild.samsidh.com/api/v1/products/getProductsNearby?lat=$latitude&lng=$longitude");
-
+    print("URL $url");
     // Print the API URL
     print("Fetching products from: $url");
 
@@ -66,6 +67,7 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
         setState(() {
           products = responseBody["data"]["products"];
           filteredProducts = products;
+          print("API REPONSE $products");
         });
 
         // Check if no products were found
@@ -249,66 +251,6 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
       ),
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: FadeInDown(
-          child: TextField(
-            controller: searchController,
-            decoration: InputDecoration(
-              hintText: "Search products...",
-              border: InputBorder.none,
-              suffixIcon: IconButton(
-                icon: Icon(Icons.clear),
-                onPressed: () {
-                  searchController.clear();
-                  _onSearchChanged("");
-                },
-              ),
-            ),
-            onChanged: _onSearchChanged,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.location_on, color: Colors.black87),
-            onPressed: _getCurrentLocation,
-          ),
-        ],
-      ),
-      body: isLoading
-          ? Center(child: CircularProgressIndicator(color: Colors.black87))
-          : filteredProducts.isEmpty
-          ? Center(
-        child: Text(
-          "No products found",
-          style: GoogleFonts.poppins(fontSize: 18, color: Colors.grey.shade600),
-        ),
-      )
-          : ListView(
-        children: [
-          ...filteredProducts.take(5).map((product) =>
-              _buildProductCard(product)).toList(),
-          if (filteredProducts.length > 5 && !showAllProducts)
-            TextButton(
-              onPressed: () => setState(() => showAllProducts = true),
-              child: Text("See more",
-                  style: GoogleFonts.poppins(fontSize: 16, color: Colors.blue)),
-            ),
-          if (showAllProducts) ...filteredProducts.skip(5).map((product) =>
-              _buildProductCard(product)).toList(),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showLocationDialog,
-        backgroundColor: Colors.black87,
-        child: Icon(Icons.location_searching, color: Colors.white),
-      ),
-    );
-  }
-
   Widget _buildProductCard(dynamic product) {
     String imageUrl = product["productImages"].isNotEmpty
         ? product["productImages"][0]
@@ -345,19 +287,151 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
           title: Text(
             product["name"],
             style: GoogleFonts.poppins(
-                fontSize: 18, fontWeight: FontWeight.bold),
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                  "Price: ₹${product["priceTypes"][0]["price"]} / ${product["priceTypes"][0]["type"]}"),
+                "Price: ₹${product["priceTypes"][0]["price"]} / ${product["priceTypes"][0]["type"]}",
+              ),
               Text("Condition: ${product["condition"]}"),
               Text("Available Quantity: ${product["quantity"]}"),
+              SizedBox(height: 4), // Add some spacing
+              // Display product rating
+              Row(
+                children: [
+                  Icon(
+                    Icons.star,
+                    color: Colors.amber,
+                    size: 16,
+                  ),
+                  SizedBox(width: 4), // Add spacing between icon and text
+                  Text(
+                    "${product["ratingsAverage"]}", // Assuming rating is a double or int
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: FadeInDown(
+          child: TextField(
+            controller: searchController,
+            decoration: InputDecoration(
+              hintText: "Search products...",
+              border: InputBorder.none,
+              suffixIcon: IconButton(
+                icon: Icon(Icons.clear),
+                onPressed: () {
+                  searchController.clear();
+                  _onSearchChanged("");
+                },
+              ),
+            ),
+            onChanged: _onSearchChanged,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.location_on, color: Colors.black87),
+            onPressed: _getCurrentLocation,
+          ),
+        ],
+      ),
+      body: isLoading
+          ? _buildShimmerEffect()
+          : filteredProducts.isEmpty
+          ? Center(
+        child: Text(
+          "No products found",
+          style: GoogleFonts.poppins(fontSize: 18, color: Colors.grey.shade600),
+        ),
+      )
+          : ListView(
+        children: [
+          ...filteredProducts.take(5).map((product) =>
+              _buildProductCard(product)).toList(),
+          if (filteredProducts.length > 5 && !showAllProducts)
+            TextButton(
+              onPressed: () => setState(() => showAllProducts = true),
+              child: Text("See more",
+                  style: GoogleFonts.poppins(fontSize: 16, color: Colors.blue)),
+            ),
+          if (showAllProducts) ...filteredProducts.skip(5).map((product) =>
+              _buildProductCard(product)).toList(),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showLocationDialog,
+        backgroundColor: Colors.black87,
+        child: Icon(Icons.location_searching, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildShimmerEffect() {
+    return ListView.builder(
+      itemCount: 5, // Number of shimmer items to display
+      itemBuilder: (context, index) {
+        return Shimmer.fromColors(
+          baseColor: Colors.grey[300]!,
+          highlightColor: Colors.grey[100]!,
+          child: Card(
+            margin: EdgeInsets.all(10),
+            elevation: 5,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+            child: ListTile(
+              leading: Container(
+                width: 60,
+                height: 60,
+                color: Colors.white,
+              ),
+              title: Container(
+                width: double.infinity,
+                height: 16,
+                color: Colors.white,
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    height: 14,
+                    color: Colors.white,
+                  ),
+                  SizedBox(height: 5),
+                  Container(
+                    width: double.infinity,
+                    height: 14,
+                    color: Colors.white,
+                  ),
+                  SizedBox(height: 5),
+                  Container(
+                    width: double.infinity,
+                    height: 14,
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
